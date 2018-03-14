@@ -142,7 +142,8 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
-  setup();
+  AR1010_init();
+  AR1010_auto_tune(96.4, 1);
 
   si468x_init(Si468x_MODE_DAB);
 
