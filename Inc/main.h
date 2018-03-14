@@ -96,9 +96,9 @@
 #define RMII_TXD0_GPIO_Port GPIOG
 #define SW0_Pin GPIO_PIN_3
 #define SW0_GPIO_Port GPIOB
-#define CTS_INT_Pin GPIO_PIN_5
-#define CTS_INT_GPIO_Port GPIOB
-#define CTS_INT_EXTI_IRQn EXTI9_5_IRQn
+#define SI_INT_Pin GPIO_PIN_5
+#define SI_INT_GPIO_Port GPIOB
+#define SI_INT_EXTI_IRQn EXTI9_5_IRQn
 #define SI_RST_Pin GPIO_PIN_6
 #define SI_RST_GPIO_Port GPIOB
 #define LD2_Pin GPIO_PIN_7

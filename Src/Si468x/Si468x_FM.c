@@ -20,7 +20,7 @@ void si468x_FM_tune(float MHz)
 	Interrupt_Status.STCINT = 0;
 	si468x_execute(command);
 	wait_for_interrupt(STCINT);
-	free(command);
+	free_command(command);
 }
 
 float si468x_FM_seek(uint8_t up, uint8_t wrap)
@@ -47,7 +47,7 @@ float si468x_FM_seek(uint8_t up, uint8_t wrap)
 	uint8_t read_buffer[22];
 	si468x_read_response(read_buffer, 22);
 	uint16_t new_freq = read_buffer[6] + (((uint16_t) read_buffer[7]) << 8);
-	free(command);
+	free_command(command);
 	return (float) new_freq / 100;
 }
 
@@ -57,7 +57,7 @@ void si468x_FM_RDS_status()
 	uint8_t args[] = {0x01};
 	Si468x_Command *command = build_command(FM_RDS_STATUS, args, 1);
 	si468x_execute(command);
-	free(command);
+	free_command(command);
 
 	uint8_t rds_data[20];
 	si468x_read_response(rds_data, 20);
@@ -73,8 +73,6 @@ void si468x_FM_RDS_status()
 		uint8_t decoder_identification_code = 3 - C10;
 		station_name[6 - 2 * decoder_identification_code] = BLOCK_D >> 8;
 		station_name[6 - 2 * decoder_identification_code + 1] = BLOCK_D & 0xFF;
-
-		HAL_Delay(1);
 	}
 	else if (group_type == 4)
 	{
@@ -84,8 +82,6 @@ void si468x_FM_RDS_status()
 		date_and_time += BLOCK_D;
 
 		uint8_t minutes = (date_and_time & 0x0FC0) >> 5;
-		HAL_Delay(1);
+		// !!!
 	}
-
-	HAL_Delay(1);
 }

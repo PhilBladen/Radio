@@ -2,7 +2,7 @@
 #include "stm32f7xx_hal.h"
 #include <stdint.h>
 
-int addr = 0x10;
+#define AR1010_ADDRESS 0x10
 
 uint16_t initialRegisters[18] = {
 	0xFFFB,		// R0:  1111 1111 1111 1011
@@ -30,14 +30,12 @@ static uint8_t volume2_conv[19] = {0x0, 0xC, 0xD, 0xF, 0xC, 0xD, 0xF, 0xF, 0xF, 
 
 static uint8_t reg_write(uint8_t memAddr, uint16_t inputWord);
 static uint16_t reg_read(uint8_t memAddr);
-static uint8_t memXOR(uint8_t memAddr, uint16_t mask);
-static uint8_t memAND(uint8_t memAddr, uint16_t mask);
-static uint8_t memOR(uint8_t memAddr, uint16_t mask);
-static uint8_t memNOT(uint8_t memAddr);
-static uint8_t memHigh(uint8_t memAddr, uint16_t mask);
-static uint8_t memLow(uint8_t memAddr, uint16_t mask);
-static uint16_t memSubRead(uint8_t memAddr, uint16_t mask);
-static uint8_t memSubWrite(uint8_t memAddr, uint16_t inputWord, uint16_t mask);
+static uint8_t mem_AND(uint8_t memAddr, uint16_t mask);
+static uint8_t mem_OR(uint8_t memAddr, uint16_t mask);
+static uint8_t mem_high(uint8_t memAddr, uint16_t mask);
+static uint8_t mem_low(uint8_t memAddr, uint16_t mask);
+static uint16_t mem_sub_read(uint8_t memAddr, uint16_t mask);
+static uint8_t mem_sub_write(uint8_t memAddr, uint16_t inputWord, uint16_t mask);
 
 void AR1010_init()
 {
@@ -45,9 +43,9 @@ void AR1010_init()
 		reg_write(i, initialRegisters[i]);
 	reg_write(0x00, initialRegisters[0]);
 	//while(!memSubRead(0x13, 0x0020));
-	memLow(0x01, 0x000E); //disable HMUTE and SMUTE
-	memSubWrite(0x03, 0B11 << 3, 0B11 << 3); //Setup Band and Space
-	memSubWrite(0x03, 0B1000 << 7, 0B1111 << 7); //Set Volume
+	mem_low(0x01, 0x000E); //disable HMUTE and SMUTE
+	mem_sub_write(0x03, 0B11 << 3, 0B11 << 3); //Setup Band and Space
+	mem_sub_write(0x03, 0B1000 << 7, 0B1111 << 7); //Set Volume
 
 }
 
@@ -59,16 +57,16 @@ uint8_t reg_write(uint8_t memAddr, uint16_t inputWord)
 	data[0] = memAddr;
 	data[1] = upper;
 	data[2] = lower;
-	I2C_write(addr, data, 3);
+	I2C_write(AR1010_ADDRESS, data, 3);
 	HAL_Delay(10);
 	return 0;
 }
 
 uint16_t reg_read(uint8_t memAddr)
 {
-	I2C_write(addr, &memAddr, 1);
+	I2C_write(AR1010_ADDRESS, &memAddr, 1);
 	uint8_t read[2];
-	I2C_read(addr, read, 2);
+	I2C_read(AR1010_ADDRESS, &read, 2);
 	uint8_t upper = read[0];
 	uint8_t lower = read[1];
 	uint16_t outputWord = (upper << 8) + lower;
@@ -76,51 +74,37 @@ uint16_t reg_read(uint8_t memAddr)
 	return outputWord;
 }
 
-uint8_t memXOR(uint8_t memAddr, uint16_t mask)
-{
-	uint16_t opWord = reg_read(memAddr);
-	opWord = opWord ^ mask;
-	return reg_write(memAddr, opWord);
-}
-
-uint8_t memAND(uint8_t memAddr, uint16_t mask)
+uint8_t mem_AND(uint8_t memAddr, uint16_t mask)
 {
 	uint16_t opWord = reg_read(memAddr);
 	opWord = opWord & mask;
 	return reg_write(memAddr, opWord);
 }
 
-uint8_t memOR(uint8_t memAddr, uint16_t mask)
+uint8_t mem_OR(uint8_t memAddr, uint16_t mask)
 {
 	uint16_t opWord = reg_read(memAddr);
-	opWord = opWord | mask;
+	opWord |= mask;
 	return reg_write(memAddr, opWord);
 }
 
-uint8_t memNOT(uint8_t memAddr)
+uint8_t mem_high(uint8_t memAddr, uint16_t mask)
 {
-	uint16_t opWord = reg_read(memAddr);
-	opWord = ~opWord;
-	return reg_write(memAddr, opWord);
+	return mem_OR(memAddr, mask);
 }
 
-uint8_t memHigh(uint8_t memAddr, uint16_t mask)
+uint8_t mem_low(uint8_t memAddr, uint16_t mask)
 {
-	return memOR(memAddr, mask);
+	return mem_AND(memAddr, ~mask);
 }
 
-uint8_t memLow(uint8_t memAddr, uint16_t mask)
-{
-	return memAND(memAddr, ~mask);
-}
-
-uint16_t memSubRead(uint8_t memAddr, uint16_t mask)
+uint16_t mem_sub_read(uint8_t memAddr, uint16_t mask)
 {
 	uint16_t opWord = reg_read(memAddr);
 	return opWord & mask;
 }
 
-uint8_t memSubWrite(uint8_t memAddr, uint16_t inputWord, uint16_t mask)
+uint8_t mem_sub_write(uint8_t memAddr, uint16_t inputWord, uint16_t mask)
 {
 	uint16_t opWord = reg_read(memAddr);
 	opWord = opWord & ~mask;
@@ -148,14 +132,14 @@ void AR1010_tune(float freq, uint8_t convert)
 	else
 		chan = (uint16_t) freq;
 
-	memHigh(0x01, 0x0002);                //Set hmute
-	memLow(0x02, 0x0200);                 //Clear TUNE
-	memLow(0x03, 0x4000);                 //Clear SEEK
+	mem_high(0x01, 0x0002);                //Set hmute
+	mem_low(0x02, 0x0200);                 //Clear TUNE
+	mem_low(0x03, 0x4000);                 //Clear SEEK
 	memSubWrite(0x02, chan, 0x01FF);      //Set CHAN
-	memHigh(0x02, 0x0200);                //Enable TUNE
-	while (!memSubRead(0x13, 0x0020))
+	mem_high(0x02, 0x0200);                //Enable TUNE
+	while (!mem_sub_read(0x13, 0x0020))
 		;     //Wait STC
-	memLow(0x01, 0x0002);                 //Clear hmute
+	mem_low(0x01, 0x0002);                 //Clear hmute
 }
 
 void AR1010_auto_tune(float freq, uint8_t convert)
@@ -166,58 +150,58 @@ void AR1010_auto_tune(float freq, uint8_t convert)
 	else
 		chan = (uint16_t) freq;
 
-	memHigh(0x01, 0x0002);										//Set hmute
-	memLow(0x02, 0x0200);										//Clear TUNE
-	memLow(0x03, 0x4000);										//Clear SEEK
-	memSubWrite(0x02, chan, 0x01FF);							//Set CHAN
+	mem_high(0x01, 0x0002);										//Set hmute
+	mem_low(0x02, 0x0200);										//Clear TUNE
+	mem_low(0x03, 0x4000);										//Clear SEEK
+	mem_sub_write(0x02, chan, 0x01FF);							//Set CHAN
 														//Read Low-side LO injection
-	memSubWrite(0x0B, 0x0000, 0x8005);							//Set R11 (Clear D15, Clear D0/D2)
-	memHigh(0x02, 0x0200);										//Enable TUNE
-	while (!memSubRead(0x13, 0x0020))
+	mem_sub_write(0x0B, 0x0000, 0x8005);							//Set R11 (Clear D15, Clear D0/D2)
+	mem_high(0x02, 0x0200);										//Enable TUNE
+	while (!mem_sub_read(0x13, 0x0020))
 		;                   //Wait for STC flag
-	uint8_t RSSI1 = memSubRead(0x12, 0xFE00);					//Get RSSI1
-	memLow(0x02, 0x0200);										//Clear TUNE
+	uint8_t RSSI1 = mem_sub_read(0x12, 0xFE00);					//Get RSSI1
+	mem_low(0x02, 0x0200);										//Clear TUNE
 														//Read High-side LO injection
-	memSubWrite(0x0B, 0x8005, 0x8005);							//Set R11 (Set D15, Set D0/D2)
-	memHigh(0x02, 0x0200);										//Enable TUNE
-	while (!memSubRead(0x13, 0x0020))
+	mem_sub_write(0x0B, 0x8005, 0x8005);							//Set R11 (Set D15, Set D0/D2)
+	mem_high(0x02, 0x0200);										//Enable TUNE
+	while (!mem_sub_read(0x13, 0x0020))
 		;                   //Wait for STC flag
-	uint8_t RSSI2 = memSubRead(0x12, 0xFE00);					//Get RSSI2
-	memLow(0x02, 0x0200);										//Clear TUNE
+	uint8_t RSSI2 = mem_sub_read(0x12, 0xFE00);					//Get RSSI2
+	mem_low(0x02, 0x0200);										//Clear TUNE
 														//Compare Hi-Lo strength
 	if (RSSI1 > RSSI2)
-		memSubWrite(0x0B, 0x0005, 0x8005);						//(RSSI1>RSSI2)?R11(Clear D15, Set D0/D2)
+		mem_sub_write(0x0B, 0x0005, 0x8005);						//(RSSI1>RSSI2)?R11(Clear D15, Set D0/D2)
 	else
-		memSubWrite(0x0B, 0x0000, 0x8000);						//:R11(Set D11, Clear D0/D2)
-	memHigh(0x02, 0x0200);										//Enable TUNE
-	while (!memSubRead(0x13, 0x0020));							//Wait STC
-	memLow(0x01, 0x0002);										//Clear hmute
+		mem_sub_write(0x0B, 0x0000, 0x8000);						//:R11(Set D11, Clear D0/D2)
+	mem_high(0x02, 0x0200);										//Enable TUNE
+	while (!mem_sub_read(0x13, 0x0020));							//Wait STC
+	mem_low(0x01, 0x0002);										//Clear hmute
 }
 
 void AR1010_seek()
 { //NEEDS WORK
-	memHigh(0x01, 0x0002);                                  //Set hmute
-	memLow(0x02, 0x0200);                                   //Clear TUNE
-	memSubWrite(0x02, memSubRead(0x13, 0xFF80) >> 7, 0x01FF); //Set CHAN = READCHAN
-	memLow(0x03, 0x4000);                                   //Clear SEEK
-	memHigh(0x03, 0x8010);                   //Set SEEKUP/SEEKTH !!!TWEAK SEEKTH
-	memHigh(0x03, 0x4000);                                  //Enable SEEK
-	while (!memSubRead(0x13, 0x0020));                       //Wait STC
-	memLow(0x01, 0x0002);                                   //Clear hmute
+	mem_high(0x01, 0x0002);                                  //Set hmute
+	mem_low(0x02, 0x0200);                                   //Clear TUNE
+	mem_sub_write(0x02, mem_sub_read(0x13, 0xFF80) >> 7, 0x01FF); //Set CHAN = READCHAN
+	mem_low(0x03, 0x4000);                                   //Clear SEEK
+	mem_high(0x03, 0x8010);                   //Set SEEKUP/SEEKTH !!!TWEAK SEEKTH
+	mem_high(0x03, 0x4000);                                  //Enable SEEK
+	while (!mem_sub_read(0x13, 0x0020));                       //Wait STC
+	mem_low(0x01, 0x0002);                                   //Clear hmute
 }
 
 void AR1010_auto_seek()
 { //NEEDS WORK
-	memHigh(0x01, 0x0002);                                  //Set hmute
-	memLow(0x02, 0x0200);                                   //Clear TUNE
-	memSubWrite(0x02, memSubRead(0x13, 0xFF80) >> 7, 0x01FF); //Set CHAN = READCHAN
-	memLow(0x03, 0x4000);                                   //Clear SEEK
-	memHigh(0x03, 0x8010);                   //Set SEEKUP/SEEKTH !!!TWEAK SEEKTH
-	memHigh(0x03, 0x4000);                                  //Enable SEEK
-	while (!memSubRead(0x13, 0x0020));                       //Wait STC
-	if (!memSubRead(0x13, 0x0010))                           //If !SF
-		AR1010_auto_tune((float) (memSubRead(0x13, 0xFF80) >> 7), 0); //autoTune with READCHAN                                             //
-	memLow(0x01, 0x0002);                                   //Clear hmute
+	mem_high(0x01, 0x0002);                                  //Set hmute
+	mem_low(0x02, 0x0200);                                   //Clear TUNE
+	mem_sub_write(0x02, mem_sub_read(0x13, 0xFF80) >> 7, 0x01FF); //Set CHAN = READCHAN
+	mem_low(0x03, 0x4000);                                   //Clear SEEK
+	mem_high(0x03, 0x8010);                   //Set SEEKUP/SEEKTH !!!TWEAK SEEKTH
+	mem_high(0x03, 0x4000);                                  //Enable SEEK
+	while (!mem_sub_read(0x13, 0x0020));                       //Wait STC
+	if (!mem_sub_read(0x13, 0x0010))                           //If !SF
+		AR1010_auto_tune((float) (mem_sub_read(0x13, 0xFF80) >> 7), 0); //autoTune with READCHAN                                             //
+	mem_low(0x01, 0x0002);                                   //Clear hmute
 }
 
 void AR1010_set_volume(uint8_t volume)
@@ -226,6 +210,6 @@ void AR1010_set_volume(uint8_t volume)
 		volume = 18;
 	int write1 = volume1_conv[volume];
 	int write2 = volume2_conv[volume];
-	memSubWrite(0x03, write1 << 7, 0B1111 << 7);
-	memSubWrite(0x0E, write2 << 12, 0B1111 << 12);
+	mem_sub_write(0x03, write1 << 7, 0B1111 << 7);
+	mem_sub_write(0x0E, write2 << 12, 0B1111 << 12);
 }

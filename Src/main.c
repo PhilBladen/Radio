@@ -103,7 +103,7 @@ void I2C_read(uint16_t address, uint8_t *read_buffer, uint16_t size)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if (GPIO_Pin == CTS_INT_Pin)
+    if (GPIO_Pin == SI_INT_Pin)
     	si468x_interrupt();
 }
 /* USER CODE END 0 */

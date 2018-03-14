@@ -98,10 +98,12 @@ Si468x_Command *build_command(uint8_t command_id, uint8_t *args, uint16_t num_ar
 Si468x_Command *build_command_ext(uint8_t command_id, uint8_t *args, uint16_t num_args, uint8_t *data, uint16_t data_size);
 uint8_t si468x_execute(Si468x_Command *command);
 uint8_t si468x_execute_ext(Si468x_Command *command, uint8_t use_interrupt);
+void free_command(Si468x_Command *command);
+
 void wait_for_interrupt(enum Interrupt interrupt);
 uint8_t si468x_read_response(uint8_t *response_buffer, uint16_t response_size);
 void si468x_update_interrupts();
-void si468x_decode_digital_service_list(uint8_t *service_list_data);
+void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data);
 void si468x_start_digital_service(uint32_t service_id, uint32_t component_id);
 
 void si468x_DAB_set_freq_list();
