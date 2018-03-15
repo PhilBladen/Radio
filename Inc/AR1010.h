@@ -11,7 +11,7 @@ void AR1010_seek();
 void AR1010_auto_seek();
 void AR1010_set_volume(uint8_t volume);
 
-extern void I2C_write(uint16_t address, uint8_t *data, uint16_t size);
-extern void I2C_read(uint16_t address, uint8_t *read_buffer, uint16_t size);
+extern void I2C_write(uint8_t address, uint8_t *data, uint16_t size);
+extern void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size);
 
 #endif

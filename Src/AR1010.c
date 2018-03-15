@@ -66,7 +66,7 @@ uint16_t reg_read(uint8_t memAddr)
 {
 	I2C_write(AR1010_ADDRESS, &memAddr, 1);
 	uint8_t read[2];
-	I2C_read(AR1010_ADDRESS, &read, 2);
+	I2C_read(AR1010_ADDRESS, read, 2);
 	uint8_t upper = read[0];
 	uint8_t lower = read[1];
 	uint16_t outputWord = (upper << 8) + lower;
@@ -135,7 +135,7 @@ void AR1010_tune(float freq, uint8_t convert)
 	mem_high(0x01, 0x0002);                //Set hmute
 	mem_low(0x02, 0x0200);                 //Clear TUNE
 	mem_low(0x03, 0x4000);                 //Clear SEEK
-	memSubWrite(0x02, chan, 0x01FF);      //Set CHAN
+	mem_sub_write(0x02, chan, 0x01FF);      //Set CHAN
 	mem_high(0x02, 0x0200);                //Enable TUNE
 	while (!mem_sub_read(0x13, 0x0020))
 		;     //Wait STC

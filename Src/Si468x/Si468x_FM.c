@@ -15,12 +15,12 @@ void si468x_FM_tune(float MHz)
 		return;
 
 	uint16_t freq = MHz * 100;
-	uint8_t args[] = {0x00, freq & 0xFF, freq >> 8, 0x00, 0x00, 0x00};
-	Si468x_Command *command = build_command(FM_TUNE_FREQ, args, 6);
+	uint8_t args[] = {0x00, freq & 0xFF, freq >> 8, 0x00, 0x00};
+	Si468x_Command *command = si468x_build_command(FM_TUNE_FREQ, args, 5);
 	Interrupt_Status.STCINT = 0;
 	si468x_execute(command);
-	wait_for_interrupt(STCINT);
-	free_command(command);
+	si468x_wait_for_interrupt(STCINT);
+	si468x_free_command(command);
 }
 
 float si468x_FM_seek(uint8_t up, uint8_t wrap)
@@ -30,24 +30,24 @@ float si468x_FM_seek(uint8_t up, uint8_t wrap)
 
 	uint8_t args[] = {
 			0x10,
-			0x00 | ((up & 0x1) << 1) | (wrap & 0x1),
+			((up & 0x1) << 1) | (wrap & 0x1),
 			0x00,
 			0x00,
 			0x00
 	};
-	Si468x_Command *command = build_command(FM_SEEK_START, args, 5);
+	Si468x_Command *command = si468x_build_command(FM_SEEK_START, args, 5);
 	Interrupt_Status.STCINT = 0;
 	si468x_execute(command);
 	free(command);
-	wait_for_interrupt(STCINT);
+	si468x_wait_for_interrupt(STCINT);
 
 	args[0] = 0x00;
-	command = build_command(FM_RSQ_STATUS, args, 1);
+	command = si468x_build_command(FM_RSQ_STATUS, args, 1);
 	si468x_execute(command);
 	uint8_t read_buffer[22];
 	si468x_read_response(read_buffer, 22);
 	uint16_t new_freq = read_buffer[6] + (((uint16_t) read_buffer[7]) << 8);
-	free_command(command);
+	si468x_free_command(command);
 	return (float) new_freq / 100;
 }
 
@@ -55,9 +55,9 @@ unsigned char station_name[8];
 void si468x_FM_RDS_status()
 {
 	uint8_t args[] = {0x01};
-	Si468x_Command *command = build_command(FM_RDS_STATUS, args, 1);
+	Si468x_Command *command = si468x_build_command(FM_RDS_STATUS, args, 1);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 
 	uint8_t rds_data[20];
 	si468x_read_response(rds_data, 20);

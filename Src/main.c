@@ -48,6 +48,7 @@
 /* USER CODE BEGIN Includes */
 #include "Si468x/Si468x.h"
 #include "Si468x/Si468x_FM.h"
+#include "Si468x/Si468x_DAB.h"
 #include "AR1010.h"
 /* USER CODE END Includes */
 
@@ -85,7 +86,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 	Error_Handler();
 }
 
-void I2C_write(uint16_t address, uint8_t *data, uint16_t size)
+void I2C_write(uint8_t address, uint8_t *data, uint16_t size)
 {
 	I2C_TxDMAComplete = 0;
 	if (HAL_I2C_Master_Transmit_DMA(&hi2c1, address << 1, data, size) != HAL_OK)
@@ -93,7 +94,7 @@ void I2C_write(uint16_t address, uint8_t *data, uint16_t size)
 	while (!I2C_TxDMAComplete);
 }
 
-void I2C_read(uint16_t address, uint8_t *read_buffer, uint16_t size)
+void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size)
 {
 	I2C_RxDMAComplete = 0;
 	if (HAL_I2C_Master_Receive_DMA(&hi2c1, address << 1, read_buffer, size) != HAL_OK)
@@ -151,7 +152,6 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int i = 0;
   while (1)
   {
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
@@ -164,22 +164,7 @@ int main(void)
 //	  si468x_FM_tune(97.7); // Radio 1
 //	  si468x_FM_tune(88.1); // BBC R2
 
-	  si468x_DAB_tune(i++);
-	  DAB_DigRad_Status status;
-	  DAB_Event_Status event_status;
-	  si468x_DAB_get_digrad_status(&status);
-
-	  if (status.VALID)
-	  {
-		  si468x_DAB_get_event_status(&event_status);
-		  while (!event_status.SVRLIST)
-			  si468x_DAB_get_event_status(&event_status);
-	  	  si468x_DAB_get_digital_service_list();
-	  }
-
-	  if (i >= 38)
-		  i = 0;
-
+	  si468x_DAB_band_scan();
 
   /* USER CODE END WHILE */
 

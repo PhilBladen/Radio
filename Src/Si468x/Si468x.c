@@ -2,6 +2,7 @@
 #include "gpio.h"
 #include "Si468x/Si468x.h"
 #include "Si468x/Si468x_minipatch.h"
+#include "Si468x/Si468x_DAB.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,6 +26,7 @@
 #define PROP_DIGITAL_IO_OUTPUT_SAMPLE_RATE	0x0201
 #define PROP_PIN_CONFIG_ENABLE				0x0800
 #define PROP_FLASH_SPI_CLOCK_FREQ_KHZ		0x0001
+#define PROP_HIGH_SPEED_READ_MAX_FREQ_MHZ	0x0103
 #define PROP_DAB_TUNE_FE_CFG				0x1712
 #define PROP_FM_RDS_CONFIG					0x3C02
 
@@ -67,6 +69,7 @@ void si468x_init(enum Si468x_MODE mode)
 	HAL_Delay(15);
 
 	si468x_flash_set_property(PROP_FLASH_SPI_CLOCK_FREQ_KHZ, 0x9C40); // Set flash speed to 40MHz
+	si468x_flash_set_property(PROP_HIGH_SPEED_READ_MAX_FREQ_MHZ, 0x00FF); // Set flash high speed read speed to 127MHz
 
 	si468x_load_init();
 	si468x_load_ROM(mode);
@@ -100,9 +103,9 @@ void si468x_start_digital_service(uint32_t service_id, uint32_t component_id)
 			(component_id >> 16) & 0xFF,
 			component_id >> 24
 	};
-	Si468x_Command *command = build_command(START_DIGITAL_SERVICE, args, 11);
+	Si468x_Command *command = si468x_build_command(START_DIGITAL_SERVICE, args, 11);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_power_up()
@@ -124,33 +127,33 @@ void si468x_power_up()
 			0x00,
 			0x00
 	};
-	Si468x_Command *command = build_command(POWER_UP, args, 15);
+	Si468x_Command *command = si468x_build_command(POWER_UP, args, 15);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_load_init()
 {
 	uint8_t args[] = {0x00};
-	Si468x_Command *command = build_command(LOAD_INIT, args, 1);
+	Si468x_Command *command = si468x_build_command(LOAD_INIT, args, 1);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_load_minipatch()
 {
 	uint8_t args[] = {0x00, 0x00, 0x00};
-	Si468x_Command *command = build_command_ext(HOST_LOAD, args, 3, minipatch_data, minipatch_size);
+	Si468x_Command *command = si468x_build_command_ext(HOST_LOAD, args, 3, minipatch_data, minipatch_size);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_load_patch()
 {
 	uint8_t args[] = {0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	Si468x_Command *command = build_command(FLASH_LOAD, args, 11);
+	Si468x_Command *command = si468x_build_command(FLASH_LOAD, args, 11);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 	patched = 1;
 }
 
@@ -169,36 +172,36 @@ void si468x_load_ROM(enum Si468x_MODE mode)
 			0x00,
 			0x00
 	};
-	Si468x_Command *command = build_command(FLASH_LOAD, args, 11);
+	Si468x_Command *command = si468x_build_command(FLASH_LOAD, args, 11);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_boot()
 {
 	uint8_t args[] = {0x00};
-	Si468x_Command *command = build_command(BOOT, args, 1);
+	Si468x_Command *command = si468x_build_command(BOOT, args, 1);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_set_property(uint16_t property, uint16_t value)
 {
 	uint8_t args[] = {0x00, property & 0xFF, property >> 8, value & 0xFF, value >> 8};
-	Si468x_Command *command = build_command(SET_PROPERTY, args, 5);
+	Si468x_Command *command = si468x_build_command(SET_PROPERTY, args, 5);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
 void si468x_flash_set_property(uint16_t property, uint16_t value)
 {
 	uint8_t args[] = {0x10, 0x00, 0x00, property & 0xFF, property >> 8, value & 0xFF, value >> 8};
-	Si468x_Command *command = build_command(FLASH_SET_PROP_LIST, args, 7);
+	Si468x_Command *command = si468x_build_command(FLASH_SET_PROP_LIST, args, 7);
 	si468x_execute(command);
-	free_command(command);
+	si468x_free_command(command);
 }
 
-void wait_for_interrupt(enum Interrupt interrupt)
+void si468x_wait_for_interrupt(enum Interrupt interrupt)
 {
 	uint8_t status = 0;
 	do
@@ -237,7 +240,7 @@ uint8_t si468x_execute_ext(Si468x_Command *command, uint8_t use_interrupt)
 		Interrupt_Status.CTS = 0;
 	I2C_write(Si4684_ADDRESS, command->data, command->size);
 	if (use_interrupt)
-		wait_for_interrupt(CTS);
+		si468x_wait_for_interrupt(CTS);
 	uint8_t read_buffer[4];
 	uint8_t error = si468x_read_response(read_buffer, 4);
 	return error;
@@ -251,12 +254,12 @@ uint8_t si468x_read_response(uint8_t *response_buffer, uint16_t response_size)
 	return response_buffer[0] & 0x40 ? 1 : 0;
 }
 
-Si468x_Command *build_command(uint8_t command_id, uint8_t *args, uint16_t num_args)
+Si468x_Command *si468x_build_command(uint8_t command_id, uint8_t *args, uint16_t num_args)
 {
-	return build_command_ext(command_id, args, num_args, 0, 0);
+	return si468x_build_command_ext(command_id, args, num_args, 0, 0);
 }
 
-Si468x_Command *build_command_ext(uint8_t command_id, uint8_t *args, uint16_t num_args, uint8_t *data, uint16_t data_size)
+Si468x_Command *si468x_build_command_ext(uint8_t command_id, uint8_t *args, uint16_t num_args, uint8_t *data, uint16_t data_size)
 {
 	Si468x_Command *command = (Si468x_Command *) malloc(sizeof(Si468x_Command));
 	command->size = 1 + num_args + data_size;
@@ -267,7 +270,7 @@ Si468x_Command *build_command_ext(uint8_t command_id, uint8_t *args, uint16_t nu
 	return command;
 }
 
-void free_command(Si468x_Command *command)
+void si468x_free_command(Si468x_Command *command)
 {
 	free(command->data);
 	free(command);
