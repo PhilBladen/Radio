@@ -29,6 +29,8 @@
 #define PROP_HIGH_SPEED_READ_MAX_FREQ_MHZ	0x0103
 #define PROP_DAB_TUNE_FE_CFG				0x1712
 #define PROP_FM_RDS_CONFIG					0x3C02
+#define PROP_DAB_XPAD_ENABLE				0xB400
+#define PROP_DIGITAL_SERVICE_INT_SOURCE		0x8100
 
 static void si468x_power_up();
 static void si468x_load_init();
@@ -83,15 +85,17 @@ void si468x_init(enum Si468x_MODE mode)
 	si468x_set_property(PROP_PIN_CONFIG_ENABLE, 0x8002); // I2S enable
 	si468x_set_property(PROP_DAB_TUNE_FE_CFG, 0x0001); // VHFSW
 	si468x_set_property(PROP_FM_RDS_CONFIG, 0x0001); // Enable RDS processor
+	si468x_set_property(PROP_DAB_XPAD_ENABLE, 0x0003); // Enable full PAD and XPAD
+	si468x_set_property(PROP_DIGITAL_SERVICE_INT_SOURCE, 0x0001); // Enable DSRVPCKTINT
 
 	if (mode == Si468x_MODE_DAB)
 		si468x_DAB_set_freq_list();
 }
 
-void si468x_start_digital_service(uint32_t service_id, uint32_t component_id)
+void si468x_start_digital_service(uint32_t service_id, uint32_t component_id, enum Digital_Service_Type service_type)
 {
 	uint8_t args[] = {
-			0x00,
+			service_type,
 			0x00,
 			0x00,
 			service_id & 0xFF,
@@ -272,6 +276,13 @@ Si468x_Command *si468x_build_command_ext(uint8_t command_id, uint8_t *args, uint
 
 void si468x_free_command(Si468x_Command *command)
 {
-	free(command->data);
+	if (!command)
+		return;
+	if (command->data)
+	{
+		free(command->data);
+		command->data = NULL;
+	}
 	free(command);
+	command = NULL;
 }

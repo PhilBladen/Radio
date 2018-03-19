@@ -12,6 +12,8 @@
 #define DAB_GET_FREQ_LIST			0xB9
 #define DAB_GET_TIME				0xBC
 #define GET_DIGITAL_SERVICE_LIST	0x80
+#define DAB_GET_COMPONENT_INFO		0xBB
+#define DAB_GET_TIME				0xBC
 
 static const uint32_t dab_freq_list[] = {
 		174928, 176640, 178352, 180064, 181936, 183648, 185360, 187072, 188928, 190640,
@@ -109,21 +111,30 @@ void si468x_DAB_band_scan()
 		}
 	}
 
+	char* target_name = "BBC Radio 1     ";//"BBC Guide       ";
 	uint8_t currently_tuned_ensemble = 0;
-	for (int i = 0; i < service_list.size; i++)
+	while (1)
 	{
-		DAB_Service *service = service_list.services[i];
-		if (service->pd_flag != 0)
-			continue;
-		char* target_name = "BBC Radio 1     ";
-		if (strncmp(service->name, target_name, 16) != 0)
-			continue;
-		if (service->freq_index != currently_tuned_ensemble)
+		for (int i = 0; i < service_list.size; i++)
 		{
-			si468x_DAB_tune(service->freq_index);
-			currently_tuned_ensemble = service->freq_index;
+			DAB_Service *service = service_list.services[i];
+			//if (service->pd_flag != 0) // If service is digital then ignore
+				//continue;
+			if (strncmp(service->name, target_name, 16) != 0)
+				continue;
+			if (service->freq_index != currently_tuned_ensemble)
+			{
+				si468x_DAB_tune(service->freq_index);
+				currently_tuned_ensemble = service->freq_index;
+			}
+			for (int j = 0; j < service->num_comp; j++)
+			{
+				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_AUDIO);
+				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_DATA);
+				si468x_DAB_get_component_info(service->service_id, service->components[j]->component_id);
+				si468x_DAB_get_time();
+			}
 		}
-		si468x_start_digital_service(service->service_id, service->components[0]->component_id);
 	}
 }
 
@@ -193,6 +204,50 @@ void si468x_DAB_get_digital_service_list(uint8_t freq_index)
 	//!!!
 }
 
+void si468x_DAB_get_component_info(uint32_t service_id, uint32_t component_id)
+{
+	uint8_t args[] = {
+			0x00,
+			0x00,
+			0x00,
+			service_id & 0xFF,
+			(service_id >> 8) & 0xFF,
+			(service_id >> 16) & 0xFF,
+			service_id >> 24,
+			component_id & 0xFF,
+			(component_id >> 8) & 0xFF,
+			(component_id >> 16) & 0xFF,
+			component_id >> 24
+	};
+	Si468x_Command *command = si468x_build_command(DAB_GET_COMPONENT_INFO, args, 1);
+	si468x_execute(command);
+	si468x_free_command(command);
+
+	HAL_Delay(5000);
+
+	uint8_t response_buffer[50];
+	si468x_read_response(response_buffer, 50);
+	uint8_t num_user_applications = response_buffer[26];
+	//if (num_user_applications)
+		HAL_Delay(1);
+	// !!!
+}
+
+DAB_Time si468x_DAB_get_time()
+{
+	uint8_t args[] = {0x00};
+	Si468x_Command *command = si468x_build_command(DAB_GET_TIME, args, 1);
+	si468x_execute(command);
+	si468x_free_command(command);
+
+	DAB_Time time;
+	si468x_read_response(time.data, 11);
+
+	HAL_Delay(1);
+
+	return time;
+}
+
 void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index)
 {
 	if (current_mode != Si468x_MODE_DAB)
@@ -233,7 +288,12 @@ void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t 
 			component_id += ((uint32_t) service_list_data[data_pointer + 1]) << 8;
 			component_id += ((uint32_t) service_list_data[data_pointer + 2]) << 16;
 			component_id += ((uint32_t) service_list_data[data_pointer + 3]) << 24;
-			data_pointer += 4;
+			data_pointer += 3;
+
+			uint8_t user_application_valid = service_list_data[data_pointer] & 0x01;
+			if (user_application_valid)
+				HAL_Delay(1);
+			data_pointer += 1;
 
 			DAB_Component *component = (DAB_Component*) malloc(sizeof(DAB_Component));
 			component->component_id = component_id;

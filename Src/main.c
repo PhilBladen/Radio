@@ -50,6 +50,7 @@
 #include "Si468x/Si468x_FM.h"
 #include "Si468x/Si468x_DAB.h"
 #include "AR1010.h"
+#include "SST25V_flash.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -102,6 +103,28 @@ void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size)
 	while (!I2C_RxDMAComplete);
 }
 
+void flash_SPI_write(uint8_t *data, uint16_t size)
+{
+	HAL_SPI_Transmit(&hspi5, data, size, 10);
+}
+
+void flash_SPI_read(uint8_t *read_buffer, uint16_t size)
+{
+	HAL_SPI_Receive(&hspi5, read_buffer, size, 10);
+}
+
+uint8_t flash_SPI_read_write_byte(uint8_t data)
+{
+	uint8_t received;
+	HAL_SPI_TransmitReceive(&hspi5, &data, &received, 1, 10);
+	return received;
+}
+
+void flash_CS_pin(uint8_t set)
+{
+	HAL_GPIO_WritePin(FLASH_SS_GPIO_Port, FLASH_SS_Pin, set);
+}
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == SI_INT_Pin)
@@ -115,6 +138,9 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
+
+  /* Enable I-Cache-------------------------------------------------------------*/
+  SCB_EnableICache();
 
   /* MCU Configuration----------------------------------------------------------*/
 
@@ -140,11 +166,27 @@ int main(void)
   MX_I2S3_Init();
   MX_SPI1_Init();
   MX_SPI4_Init();
+  MX_SPI5_Init();
 
   /* USER CODE BEGIN 2 */
 
-  AR1010_init();
-  AR1010_auto_tune(96.4, 1);
+  uint8_t buffer[8];
+  SST25_read(0, buffer, 8);
+//  uint8_t data[] = {0x01,0x02};
+//  SST25V_sector_erase_4K(0);
+//  SST25V_write_byte(0, 0x01);
+//  SST25V_read(0, buffer, 8);
+
+  SST25_sector_erase_4K(0);
+  SST25_write_byte(0, 0x98);
+
+  SST25_read(0, buffer, 8);
+
+  //while (1)
+  //{
+  //AR1010_init();
+  //AR1010_auto_tune(96.4, 1);
+  //}
 
   si468x_init(Si468x_MODE_DAB);
 
@@ -227,9 +269,9 @@ void SystemClock_Config(void)
   }
 
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_I2S;
-  PeriphClkInitStruct.PLLI2S.PLLI2SN = 384;
+  PeriphClkInitStruct.PLLI2S.PLLI2SN = 344;
   PeriphClkInitStruct.PLLI2S.PLLI2SP = RCC_PLLP_DIV2;
-  PeriphClkInitStruct.PLLI2S.PLLI2SR = 5;
+  PeriphClkInitStruct.PLLI2S.PLLI2SR = 7;
   PeriphClkInitStruct.PLLI2S.PLLI2SQ = 2;
   PeriphClkInitStruct.PLLI2SDivQ = 1;
   PeriphClkInitStruct.I2sClockSelection = RCC_I2SCLKSOURCE_PLLI2S;
