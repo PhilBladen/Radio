@@ -51,6 +51,7 @@
 #include "Si468x/Si468x_DAB.h"
 #include "AR1010.h"
 #include "SST25V_flash.h"
+#include "core_cm7.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -89,6 +90,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 
 void I2C_write(uint8_t address, uint8_t *data, uint16_t size)
 {
+	SCB_CleanDCache_by_Addr(data, size);
 	I2C_TxDMAComplete = 0;
 	if (HAL_I2C_Master_Transmit_DMA(&hi2c1, address << 1, data, size) != HAL_OK)
 		Error_Handler();
@@ -97,6 +99,7 @@ void I2C_write(uint8_t address, uint8_t *data, uint16_t size)
 
 void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size)
 {
+	SCB_CleanInvalidateDCache_by_Addr(read_buffer, size);
 	I2C_RxDMAComplete = 0;
 	if (HAL_I2C_Master_Receive_DMA(&hi2c1, address << 1, read_buffer, size) != HAL_OK)
 		Error_Handler();
@@ -141,6 +144,9 @@ int main(void)
 
   /* Enable I-Cache-------------------------------------------------------------*/
   SCB_EnableICache();
+
+  /* Enable D-Cache-------------------------------------------------------------*/
+  SCB_EnableDCache();
 
   /* MCU Configuration----------------------------------------------------------*/
 
