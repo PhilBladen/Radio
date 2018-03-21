@@ -42,6 +42,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "i2s.h"
+#include "sai.h"
 #include "spi.h"
 #include "gpio.h"
 
@@ -52,13 +53,16 @@
 #include "AR1010.h"
 #include "SST25V_flash.h"
 #include "core_cm7.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-
+#define DWT_CTRL        (*(volatile uint32_t *)0xE0001000)
+#define CYCCNTENA       (1<<0)
+#define DWT_CYCCNT      ((volatile uint32_t *)0xE0001004)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,7 +94,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 
 void I2C_write(uint8_t address, uint8_t *data, uint16_t size)
 {
-	SCB_CleanDCache_by_Addr(data, size);
+	SCB_CleanDCache_by_Addr((void *) data, size);
 	I2C_TxDMAComplete = 0;
 	if (HAL_I2C_Master_Transmit_DMA(&hi2c1, address << 1, data, size) != HAL_OK)
 		Error_Handler();
@@ -99,7 +103,7 @@ void I2C_write(uint8_t address, uint8_t *data, uint16_t size)
 
 void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size)
 {
-	SCB_CleanInvalidateDCache_by_Addr(read_buffer, size);
+	SCB_CleanInvalidateDCache_by_Addr((void *) read_buffer, size);
 	I2C_RxDMAComplete = 0;
 	if (HAL_I2C_Master_Receive_DMA(&hi2c1, address << 1, read_buffer, size) != HAL_OK)
 		Error_Handler();
@@ -108,18 +112,18 @@ void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size)
 
 void flash_SPI_write(uint8_t *data, uint16_t size)
 {
-	HAL_SPI_Transmit(&hspi5, data, size, 10);
+	HAL_SPI_Transmit(&hspi5, data, size, 1000);
 }
 
 void flash_SPI_read(uint8_t *read_buffer, uint16_t size)
 {
-	HAL_SPI_Receive(&hspi5, read_buffer, size, 10);
+	HAL_SPI_Receive(&hspi5, read_buffer, size, 1000);
 }
 
 uint8_t flash_SPI_read_write_byte(uint8_t data)
 {
 	uint8_t received;
-	HAL_SPI_TransmitReceive(&hspi5, &data, &received, 1, 10);
+	HAL_SPI_TransmitReceive(&hspi5, &data, &received, 1, 1000);
 	return received;
 }
 
@@ -137,9 +141,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* Enable I-Cache-------------------------------------------------------------*/
@@ -161,7 +163,10 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // Enable DWT */
+  DWT->LAR = 0xC5ACCE55; // Unlock register access
+  *DWT_CYCCNT = 0;
+  DWT_CTRL |= CYCCNTENA; // Enable CPU cycle counter
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -173,29 +178,23 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI4_Init();
   MX_SPI5_Init();
+  MX_SAI2_Init();
 
   /* USER CODE BEGIN 2 */
-
-  uint8_t buffer[8];
-  SST25_read(0, buffer, 8);
-//  uint8_t data[] = {0x01,0x02};
-//  SST25V_sector_erase_4K(0);
-//  SST25V_write_byte(0, 0x01);
-//  SST25V_read(0, buffer, 8);
-
-  SST25_sector_erase_4K(0);
-  SST25_write_byte(0, 0x98);
-
-  SST25_read(0, buffer, 8);
-
-  //while (1)
-  //{
-  //AR1010_init();
-  //AR1010_auto_tune(96.4, 1);
-  //}
-
   si468x_init(Si468x_MODE_DAB);
 
+  uint8_t *current_uuid = (uint8_t *) "d0aef6b7-6fec-4137-aacb-34de79535292";
+
+  uint8_t read_uuid[36];
+  SST25_read(0, read_uuid, 36);
+
+  if (strncmp((char *) current_uuid, (char *) read_uuid, 36)) // If memory not written
+  {
+	  SST25_sector_erase_4K(0);
+	  //SST25_write(0, current_uuid, 36);
+
+	  si468x_DAB_band_scan();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -203,6 +202,7 @@ int main(void)
   while (1)
   {
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+	  HAL_Delay(100);
 
 //	  si468x_FM_tune(90.3); // BBC R3
 //	  si468x_FM_tune(92.52); // BBC R4
@@ -211,8 +211,6 @@ int main(void)
 //	  si468x_FM_tune(96.4); // EAGLE
 //	  si468x_FM_tune(97.7); // Radio 1
 //	  si468x_FM_tune(88.1); // BBC R2
-
-	  si468x_DAB_band_scan();
 
   /* USER CODE END WHILE */
 
@@ -274,13 +272,10 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_I2S;
-  PeriphClkInitStruct.PLLI2S.PLLI2SN = 344;
-  PeriphClkInitStruct.PLLI2S.PLLI2SP = RCC_PLLP_DIV2;
-  PeriphClkInitStruct.PLLI2S.PLLI2SR = 7;
-  PeriphClkInitStruct.PLLI2S.PLLI2SQ = 2;
-  PeriphClkInitStruct.PLLI2SDivQ = 1;
-  PeriphClkInitStruct.I2sClockSelection = RCC_I2SCLKSOURCE_PLLI2S;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SAI2|RCC_PERIPHCLK_I2C1
+                              |RCC_PERIPHCLK_I2S;
+  PeriphClkInitStruct.I2sClockSelection = RCC_I2SCLKSOURCE_EXT;
+  PeriphClkInitStruct.Sai2ClockSelection = RCC_SAI2CLKSOURCE_PIN;
   PeriphClkInitStruct.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
