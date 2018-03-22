@@ -69,8 +69,6 @@ void si468x_DAB_tune(uint8_t freq_index);
 void si468x_DAB_band_scan();
 void si468x_DAB_get_digrad_status(DAB_DigRad_Status *status);
 void si468x_DAB_get_event_status(DAB_Event_Status *status);
-void si468x_DAB_get_digital_service_list(uint8_t freq_index);
-void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index);
 void si468x_DAB_get_component_info(uint32_t service_id, uint32_t component_id);
 DAB_Time si468x_DAB_get_time();
 

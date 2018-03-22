@@ -183,7 +183,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   si468x_init(Si468x_MODE_DAB);
 
-  uint8_t *current_uuid = (uint8_t *) "d0aef6b7-6fec-4137-aacb-34de79535292";
+  uint8_t *current_uuid = (uint8_t *) "5125c60f-994f-4b6f-90f2-b4eb7efdef30";
 
   uint8_t read_uuid[36];
   SST25_read(0, read_uuid, 36);
@@ -191,10 +191,13 @@ int main(void)
   if (strncmp((char *) current_uuid, (char *) read_uuid, 36)) // If memory not written
   {
 	  SST25_sector_erase_4K(0);
-	  //SST25_write(0, current_uuid, 36);
+	  SST25_write(0, current_uuid, 36);
 
 	  si468x_DAB_band_scan();
   }
+
+  uint16_t num_services, current_service_id = 0;
+  SST25_read(4096, &num_services, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -203,6 +206,8 @@ int main(void)
   {
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
 	  HAL_Delay(100);
+
+	  si468x_DAB_tune_service(current_service_id++);
 
 //	  si468x_FM_tune(90.3); // BBC R3
 //	  si468x_FM_tune(92.52); // BBC R4

@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stm32f7xx_hal.h>
+#include "SST25V_flash.h"
+#include "stream_utils.h"
 
 // DAB:
 #define DAB_TUNE_FREQ				0xB0
@@ -61,11 +63,17 @@ typedef struct
 	char name[16];
 } DAB_Service;
 
-struct
+typedef struct
 {
 	uint8_t size;
 	DAB_Service **services;
-} service_list = {0, 0};
+} DAB_Service_List;
+
+void si468x_DAB_save_service_to_flash(DAB_Service *service, uint16_t memory_index);
+void si468x_load_service_name_list_from_flash(uint16_t memory_index);
+DAB_Service *si468x_load_service_from_flash(uint16_t memory_index);
+DAB_Service_List *si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index);
+DAB_Service_List *si468x_DAB_get_digital_service_list(uint8_t freq_index);
 
 void si468x_DAB_set_freq_list()
 {
@@ -95,6 +103,8 @@ void si468x_DAB_band_scan()
 {
 	DAB_DigRad_Status digrad_status;
 	DAB_Event_Status event_status;
+	uint16_t service_mem_id = 0;
+	uint16_t total_services = 0;
 	for (int freq_index = 0; freq_index < sizeof(dab_freq_list) / sizeof(uint32_t); freq_index++)
 	{
 		si468x_DAB_tune(freq_index);
@@ -107,35 +117,47 @@ void si468x_DAB_band_scan()
 				si468x_DAB_get_event_status(&event_status);
 
 			HAL_Delay(500);
-			si468x_DAB_get_digital_service_list(freq_index);
+			DAB_Service_List *service_list = si468x_DAB_get_digital_service_list(freq_index);
+			total_services += service_list->size;
+			for (uint8_t service_index = 0; service_index < service_list->size; service_index++)
+				si468x_DAB_save_service_to_flash(service_list->services[service_index], service_mem_id++);
 		}
 	}
+	SST25_sector_erase_4K(4096);
+	SST25_write(4096, (uint8_t *) &total_services, 2);
 
-	char* target_name = "BBC Radio 1     ";//"BBC Guide       ";
-	uint8_t currently_tuned_ensemble = 0;
-	while (1)
-	{
-		for (int i = 0; i < service_list.size; i++)
-		{
-			DAB_Service *service = service_list.services[i];
-			//if (service->pd_flag != 0) // If service is digital then ignore
-				//continue;
-			if (strncmp(service->name, target_name, 16) != 0)
-				continue;
-			if (service->freq_index != currently_tuned_ensemble)
-			{
-				si468x_DAB_tune(service->freq_index);
-				currently_tuned_ensemble = service->freq_index;
-			}
-			for (int j = 0; j < service->num_comp; j++)
-			{
-				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_AUDIO);
-				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_DATA);
-				si468x_DAB_get_component_info(service->service_id, service->components[j]->component_id);
-				si468x_DAB_get_time();
-			}
-		}
-	}
+//	char* target_name = "BBC Radio 1     ";//"BBC Guide       ";
+//	uint8_t currently_tuned_ensemble = 0;
+//	while (1)
+//	{
+//		for (int i = 0; i < service_list.size; i++)
+//		{
+//			DAB_Service *service = service_list.services[i];
+//			//if (service->pd_flag != 0) // If service is digital then ignore
+//				//continue;
+//			if (strncmp(service->name, target_name, 16) != 0)
+//				continue;
+//			if (service->freq_index != currently_tuned_ensemble)
+//			{
+//				si468x_DAB_tune(service->freq_index);
+//				currently_tuned_ensemble = service->freq_index;
+//			}
+//			for (int j = 0; j < service->num_comp; j++)
+//			{
+//				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_AUDIO);
+//				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_DATA);
+//				si468x_DAB_get_component_info(service->service_id, service->components[j]->component_id);
+//				si468x_DAB_get_time();
+//			}
+//		}
+//	}
+}
+
+void si468x_DAB_tune_service(uint16_t service_mem_id)
+{
+	DAB_Service *service = si468x_load_service_from_flash(service_mem_id);
+	si468x_DAB_tune(service->freq_index);
+	si468x_start_digital_service(service->service_id, service->components[0]->component_id, SER_AUDIO);
 }
 
 void si468x_DAB_tune(uint8_t freq_index)
@@ -181,10 +203,10 @@ void si468x_DAB_get_event_status(DAB_Event_Status *status)
 	memcpy(status->data, read_buffer + 4, 4);
 }
 
-void si468x_DAB_get_digital_service_list(uint8_t freq_index)
+DAB_Service_List *si468x_DAB_get_digital_service_list(uint8_t freq_index)
 {
 	if (current_mode != Si468x_MODE_DAB)
-		return;
+		return NULL;
 
 	uint8_t args[] = {0x00};
 	Si468x_Command *command = si468x_build_command(GET_DIGITAL_SERVICE_LIST, args, 1);
@@ -197,10 +219,12 @@ void si468x_DAB_get_digital_service_list(uint8_t freq_index)
 
 	uint8_t *service_list_data = (uint8_t *) malloc(service_list_size + 4);
 	if (!service_list_data)
-		return; // !!! ERROR
+		return NULL; // !!! ERROR
 	si468x_read_response(service_list_data, service_list_size + 4);
-	si468x_DAB_decode_digital_service_list(service_list_data + 4, freq_index);
+	DAB_Service_List *service_list = si468x_DAB_decode_digital_service_list(service_list_data + 4, freq_index);
 	free(service_list_data);
+
+	return service_list;
 	//!!!
 }
 
@@ -248,23 +272,25 @@ DAB_Time si468x_DAB_get_time()
 	return time;
 }
 
-void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index)
+DAB_Service_List *si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index)
 {
 	if (current_mode != Si468x_MODE_DAB)
-		return;
+		return NULL;
+
+	DAB_Service_List *service_list = malloc(sizeof(DAB_Service_List));
 
 	uint16_t data_pointer = 4;
 	uint8_t number_of_services = service_list_data[data_pointer];
 	data_pointer += 4;
 
-	service_list.size += number_of_services;
-	service_list.services = (DAB_Service**) realloc(service_list.services, service_list.size * sizeof(DAB_Service*));
+	service_list->size = number_of_services;
+	service_list->services = (DAB_Service**) malloc(service_list->size * sizeof(DAB_Service*));
 
 	// Start reading service 1
-	for (int i = service_list.size - number_of_services; i < service_list.size; i++)
+	for (int i = service_list->size - number_of_services; i < service_list->size; i++)
 	{
 		DAB_Service *service = (DAB_Service*) malloc(sizeof(DAB_Service));
-		service_list.services[i] = service;
+		service_list->services[i] = service;
 
 		uint32_t service_id = service_list_data[data_pointer];
 		service_id += ((uint32_t) service_list_data[data_pointer + 1]) << 8;
@@ -302,4 +328,53 @@ void si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t 
 			service->components[j] = component;
 		}
 	}
+
+	return service_list;
+}
+
+void si468x_DAB_save_service_to_flash(DAB_Service *service, uint16_t memory_index)
+{
+	Stream *stream = stream_create();
+	uint32_t memory_address = 4096 * (memory_index + 2); // Keep first 8192 bytes free for control data
+	SST25_sector_erase_4K(memory_address);
+	stream_write_uint8(stream, service->freq_index);
+	stream_write_uint32(stream, service->service_id);
+	stream_write_uint8(stream, service->service_info_1);
+	stream_write_uint8(stream, service->service_info_2);
+	stream_write_bytes(stream, (uint8_t *) service->name, 16);
+	for (uint8_t component_index = 0; component_index < service->num_comp; component_index++)
+	{
+		DAB_Component *component = service->components[component_index];
+		stream_write_uint32(stream, component->component_id);
+		stream_write_uint8(stream, component->component_info);
+	}
+	stream_flush(stream);
+	SST25_write(memory_address, stream->data, stream->data_size);
+	stream_free(stream);
+}
+
+DAB_Service *si468x_load_service_from_flash(uint16_t memory_index)
+{
+	uint16_t stream_size;
+	SST25_read(4096 * (memory_index + 2), (uint8_t *) &stream_size, 2);
+	uint8_t *data = malloc(stream_size);
+	SST25_read(4096 * (memory_index + 2), data, stream_size);
+	Stream *stream = stream_load(data, stream_size);
+
+	DAB_Service *service = malloc(sizeof(DAB_Service));
+	service->freq_index = stream_read_uint8(stream);
+	service->service_id = stream_read_uint32(stream);
+	service->service_info_1 = stream_read_uint8(stream);
+	service->service_info_2 = stream_read_uint8(stream);
+	stream_read_bytes(stream, (uint8_t *) service->name, 16);
+	service->components = (DAB_Component**) malloc(service->num_comp * sizeof(DAB_Component*));
+	for (uint8_t component_index = 0; component_index < service->num_comp; component_index++)
+	{
+		DAB_Component *component = malloc(sizeof(DAB_Component));
+		component->component_id = stream_read_uint32(stream);
+		component->component_info = stream_read_uint8(stream);
+		service->components[component_index] = component;
+	}
+	stream_free(stream);
+	return service;
 }

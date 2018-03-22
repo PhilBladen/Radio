@@ -39,7 +39,7 @@ void SST25_sector_erase_4K(uint32_t address)
 	SST25_start();
 	uint8_t cmd[] = {
 			FLASH_ERASE_4K,
-			(address >> 14) & 0xFF,
+			(address >> 16) & 0xFF,
 			(address >> 8) & 0xFF,
 			address & 0xFF
 	};
@@ -100,7 +100,7 @@ void SST25_write_byte(uint32_t address, uint8_t data)
 	SST25_start();
 	uint8_t cmd[] = {
 			FLASH_BYTE_PROGRAM,
-			(address >> 14) & 0xFF,
+			(address >> 16) & 0xFF,
 			(address >> 8) & 0xFF,
 			address & 0xFF,
 			data
@@ -119,7 +119,7 @@ void SST25_write(uint32_t address, uint8_t *data, uint16_t size)
 	address &= 0xFFFFFF;
 	uint8_t address_cmd[] = {
 			FLASH_AAI,
-			(address >> 14) & 0xFF,
+			(address >> 16) & 0xFF,
 			(address >> 8) & 0xFF,
 			address & 0xFF,
 	};
@@ -164,7 +164,7 @@ void SST25_read(uint32_t address, uint8_t *read_buffer, uint16_t size)
 	SST25_start();
 	uint8_t cmd[] = {
 			FLASH_READ_FAST,
-			(address >> 14) & 0xFF,
+			(address >> 16) & 0xFF,
 			(address >> 8) & 0xFF,
 			address & 0xFF,
 			0xFF // Dummy byte
