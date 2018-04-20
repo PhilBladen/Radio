@@ -41,7 +41,6 @@
 #include "stm32f7xx_hal.h"
 #include "dma.h"
 #include "i2c.h"
-#include "i2s.h"
 #include "sai.h"
 #include "spi.h"
 #include "gpio.h"
@@ -132,15 +131,21 @@ void flash_CS_pin(uint8_t set)
 	HAL_GPIO_WritePin(FLASH_SS_GPIO_Port, FLASH_SS_Pin, set);
 }
 
+uint8_t dab_change_service = 1;
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == SI_INT_Pin)
     	si468x_interrupt();
+    if (GPIO_Pin == USER_Btn_Pin)
+    	dab_change_service = 1;
 }
+
+uint8_t response_buffer[5][200];
 /* USER CODE END 0 */
 
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
   /* USER CODE END 1 */
 
@@ -172,42 +177,59 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_I2S2_Init();
   MX_I2C1_Init();
-  MX_I2S3_Init();
   MX_SPI1_Init();
-  MX_SPI4_Init();
-  MX_SPI5_Init();
   MX_SAI2_Init();
+  MX_SPI2_Init();
+  MX_SPI3_Init();
 
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(ESP32_SS_GPIO_Port, ESP32_SS_Pin, GPIO_PIN_RESET); // Disable ESP32 SPI listening
+
   si468x_init(Si468x_MODE_DAB);
 
-  uint8_t *current_uuid = (uint8_t *) "5125c60f-994f-4b6f-90f2-b4eb7efdef30";
+  uint8_t *current_uuid = (uint8_t *) "9f38baeb-223d-4ed3-b4d1-b427a454487a";
 
   uint8_t read_uuid[36];
-  SST25_read(0, read_uuid, 36);
+  //SST25_read(0, read_uuid, 36);
 
-  if (strncmp((char *) current_uuid, (char *) read_uuid, 36)) // If memory not written
+  //if (strncmp((char *) current_uuid, (char *) read_uuid, 36)) // If flash data either not written or wrong version
   {
-	  SST25_sector_erase_4K(0);
-	  SST25_write(0, current_uuid, 36);
+	  //SST25_sector_erase_4K(0);
+	  //SST25_write(0, current_uuid, 36);
 
 	  si468x_DAB_band_scan();
   }
 
-  uint16_t num_services, current_service_id = 0;
-  SST25_read(4096, &num_services, 2);
+  uint16_t num_services = 0, current_service_id = 0;
+  //SST25_read(4096, (uint8_t *) &num_services, 2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint8_t text_index = 0;
   while (1)
   {
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
 	  HAL_Delay(100);
 
-	  si468x_DAB_tune_service(current_service_id++);
+	  if (dab_change_service)
+	  {
+		  si468x_DAB_tune_service(current_service_id++);
+		  dab_change_service = 0;
+	  }
+	  if (current_service_id >= num_services)
+		  current_service_id = 0;
+
+	  if (Interrupt_Status.DSRVINT)
+	  {
+		  uint16_t response_size = 0;
+		  si468x_DAB_get_digital_service_data(response_buffer[text_index++], &response_size, 0);
+		  Interrupt_Status.DSRVINT = 0;
+
+		  if (text_index >= 5)
+			  text_index = 0;
+	  }
 
 //	  si468x_FM_tune(90.3); // BBC R3
 //	  si468x_FM_tune(92.52); // BBC R4
@@ -277,9 +299,7 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SAI2|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_I2S;
-  PeriphClkInitStruct.I2sClockSelection = RCC_I2SCLKSOURCE_EXT;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SAI2|RCC_PERIPHCLK_I2C1;
   PeriphClkInitStruct.Sai2ClockSelection = RCC_SAI2CLKSOURCE_PIN;
   PeriphClkInitStruct.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)

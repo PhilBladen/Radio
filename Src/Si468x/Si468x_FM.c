@@ -66,7 +66,7 @@ void si468x_FM_RDS_status()
 	uint16_t BLOCK_B = ((uint16_t) rds_data[15] << 8) + rds_data[14];
 	uint16_t BLOCK_C = ((uint16_t) rds_data[17] << 8) + rds_data[16];
 	uint16_t BLOCK_D = ((uint16_t) rds_data[19] << 8) + rds_data[18];
-	uint8_t group_type = (BLOCK_B & 0xF800) >> 8;
+	uint8_t group_type = (BLOCK_B & 0xF800) >> 8; //!!!
 	uint8_t C10 = BLOCK_B & 0x03;
 	if (group_type == 0)
 	{

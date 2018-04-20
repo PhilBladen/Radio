@@ -52,8 +52,8 @@
 /* USER CODE END Includes */
 
 extern SPI_HandleTypeDef hspi1;
-extern SPI_HandleTypeDef hspi4;
-extern SPI_HandleTypeDef hspi5;
+extern SPI_HandleTypeDef hspi2;
+extern SPI_HandleTypeDef hspi3;
 
 /* USER CODE BEGIN Private defines */
 
@@ -62,8 +62,8 @@ extern SPI_HandleTypeDef hspi5;
 extern void _Error_Handler(char *, int);
 
 void MX_SPI1_Init(void);
-void MX_SPI4_Init(void);
-void MX_SPI5_Init(void);
+void MX_SPI2_Init(void);
+void MX_SPI3_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 

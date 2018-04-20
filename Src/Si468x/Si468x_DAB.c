@@ -13,9 +13,12 @@
 #define DAB_SET_FREQ_LIST			0xB8
 #define DAB_GET_FREQ_LIST			0xB9
 #define DAB_GET_TIME				0xBC
-#define GET_DIGITAL_SERVICE_LIST	0x80
 #define DAB_GET_COMPONENT_INFO		0xBB
 #define DAB_GET_TIME				0xBC
+
+#define GET_DIGITAL_SERVICE_LIST	0x80
+#define START_DIGITAL_SERVICE		0x81
+#define GET_DIGITAL_SERVICE_DATA	0x84
 
 static const uint32_t dab_freq_list[] = {
 		174928, 176640, 178352, 180064, 181936, 183648, 185360, 187072, 188928, 190640,
@@ -70,7 +73,7 @@ typedef struct
 } DAB_Service_List;
 
 void si468x_DAB_save_service_to_flash(DAB_Service *service, uint16_t memory_index);
-void si468x_load_service_name_list_from_flash(uint16_t memory_index);
+//void si468x_load_service_name_list_from_flash(uint16_t memory_index);
 DAB_Service *si468x_load_service_from_flash(uint16_t memory_index);
 DAB_Service_List *si468x_DAB_decode_digital_service_list(uint8_t *service_list_data, uint8_t freq_index);
 DAB_Service_List *si468x_DAB_get_digital_service_list(uint8_t freq_index);
@@ -103,7 +106,7 @@ void si468x_DAB_band_scan()
 {
 	DAB_DigRad_Status digrad_status;
 	DAB_Event_Status event_status;
-	uint16_t service_mem_id = 0;
+	volatile uint16_t service_mem_id = 0;
 	uint16_t total_services = 0;
 	for (int freq_index = 0; freq_index < sizeof(dab_freq_list) / sizeof(uint32_t); freq_index++)
 	{
@@ -120,44 +123,19 @@ void si468x_DAB_band_scan()
 			DAB_Service_List *service_list = si468x_DAB_get_digital_service_list(freq_index);
 			total_services += service_list->size;
 			for (uint8_t service_index = 0; service_index < service_list->size; service_index++)
-				si468x_DAB_save_service_to_flash(service_list->services[service_index], service_mem_id++);
+				service_mem_id++;//si468x_DAB_save_service_to_flash(service_list->services[service_index], service_mem_id++);
 		}
 	}
 	SST25_sector_erase_4K(4096);
 	SST25_write(4096, (uint8_t *) &total_services, 2);
-
-//	char* target_name = "BBC Radio 1     ";//"BBC Guide       ";
-//	uint8_t currently_tuned_ensemble = 0;
-//	while (1)
-//	{
-//		for (int i = 0; i < service_list.size; i++)
-//		{
-//			DAB_Service *service = service_list.services[i];
-//			//if (service->pd_flag != 0) // If service is digital then ignore
-//				//continue;
-//			if (strncmp(service->name, target_name, 16) != 0)
-//				continue;
-//			if (service->freq_index != currently_tuned_ensemble)
-//			{
-//				si468x_DAB_tune(service->freq_index);
-//				currently_tuned_ensemble = service->freq_index;
-//			}
-//			for (int j = 0; j < service->num_comp; j++)
-//			{
-//				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_AUDIO);
-//				si468x_start_digital_service(service->service_id, service->components[j]->component_id, SER_DATA);
-//				si468x_DAB_get_component_info(service->service_id, service->components[j]->component_id);
-//				si468x_DAB_get_time();
-//			}
-//		}
-//	}
+	//!!! Handle memory freeing
 }
 
 void si468x_DAB_tune_service(uint16_t service_mem_id)
 {
 	DAB_Service *service = si468x_load_service_from_flash(service_mem_id);
 	si468x_DAB_tune(service->freq_index);
-	si468x_start_digital_service(service->service_id, service->components[0]->component_id, SER_AUDIO);
+	si468x_DAB_start_digital_service(service->service_id, service->components[0]->component_id, SER_AUDIO);
 }
 
 void si468x_DAB_tune(uint8_t freq_index)
@@ -255,6 +233,47 @@ void si468x_DAB_get_component_info(uint32_t service_id, uint32_t component_id)
 	//if (num_user_applications)
 		HAL_Delay(1);
 	// !!!
+}
+
+void si468x_DAB_start_digital_service(uint32_t service_id, uint32_t component_id, enum Digital_Service_Type service_type)
+{
+	uint8_t args[] = {
+			service_type,
+			0x00,
+			0x00,
+			service_id & 0xFF,
+			(service_id >> 8) & 0xFF,
+			(service_id >> 16) & 0xFF,
+			service_id >> 24,
+			component_id & 0xFF,
+			(component_id >> 8) & 0xFF,
+			(component_id >> 16) & 0xFF,
+			component_id >> 24
+	};
+	Si468x_Command *command = si468x_build_command(START_DIGITAL_SERVICE, args, 11);
+	si468x_execute(command);
+	si468x_free_command(command);
+}
+
+void si468x_DAB_get_digital_service_data(uint8_t *buffer, uint16_t *size, uint8_t only_status)
+{
+	uint8_t args[] = {0x0001 | (only_status ? 0x100 : 0x000)};
+	Si468x_Command *command = si468x_build_command(GET_DIGITAL_SERVICE_DATA, args, 1);
+	si468x_execute(command);
+	si468x_free_command(command);
+
+	si468x_read_response(buffer, 20);
+
+	uint16_t byte_count = (buffer[19] << 8) + buffer[18];
+	if (!byte_count)
+		return;
+
+	uint8_t data_source = buffer[7] >> 6;
+	if (data_source != 0x02)
+		return;
+
+	si468x_read_response(buffer, 24 + byte_count);
+	HAL_Delay(1);
 }
 
 DAB_Time si468x_DAB_get_time()

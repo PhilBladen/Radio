@@ -83,7 +83,7 @@ uint8_t SST25_get_status()
 	uint8_t cmd[] = {FLASH_READ_STATUS, 0x00};
 	uint8_t received[2];
 
-	if ((hal_result = HAL_SPI_TransmitReceive(&hspi5, cmd, received, 2, 1000)) != HAL_OK)
+	if ((hal_result = HAL_SPI_TransmitReceive(&hspi3, cmd, received, 2, 1000)) != HAL_OK)
 		Error_Handler();
 
 	SST25_end();

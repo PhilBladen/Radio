@@ -45,12 +45,6 @@ enum Interrupt
 	CTS
 };
 
-enum Digital_Service_Type
-{
-	SER_AUDIO = 0,
-	SER_DATA = 1
-};
-
 enum Si468x_MODE current_mode;
 
 void si468x_init(enum Si468x_MODE mode);
@@ -66,7 +60,6 @@ void si468x_free_command(Si468x_Command *command);
 void si468x_wait_for_interrupt(enum Interrupt interrupt);
 uint8_t si468x_read_response(uint8_t *response_buffer, uint16_t response_size);
 void si468x_update_interrupts();
-void si468x_start_digital_service(uint32_t service_id, uint32_t component_id, enum Digital_Service_Type service_type);
 
 extern void I2C_write(uint8_t address, uint8_t *data, uint16_t size);
 extern void I2C_read(uint8_t address, uint8_t *read_buffer, uint16_t size);

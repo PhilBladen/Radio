@@ -64,12 +64,21 @@ typedef struct
 	};
 } DAB_Time;
 
+enum Digital_Service_Type
+{
+	SER_AUDIO = 0,
+	SER_DATA = 1
+};
+
 void si468x_DAB_set_freq_list();
 void si468x_DAB_tune(uint8_t freq_index);
 void si468x_DAB_band_scan();
 void si468x_DAB_get_digrad_status(DAB_DigRad_Status *status);
 void si468x_DAB_get_event_status(DAB_Event_Status *status);
 void si468x_DAB_get_component_info(uint32_t service_id, uint32_t component_id);
+void si468x_DAB_start_digital_service(uint32_t service_id, uint32_t component_id, enum Digital_Service_Type service_type);
+void si468x_DAB_tune_service(uint16_t service_mem_id);
+void si468x_DAB_get_digital_service_data(uint8_t *buffer, uint16_t *size, uint8_t only_status);
 DAB_Time si468x_DAB_get_time();
 
 #endif

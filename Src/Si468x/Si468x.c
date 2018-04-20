@@ -17,7 +17,6 @@
 #define GET_POWER_UP_ARGS			0x0A
 #define SET_PROPERTY				0x13
 #define	FLASH_SET_PROP_LIST			0x05
-#define START_DIGITAL_SERVICE		0x81
 
 // Properties:
 #define PROP_INT_CTL_ENABLE					0x0000
@@ -78,7 +77,7 @@ void si468x_init(enum Si468x_MODE mode)
 
 	si468x_boot();
 
-	si468x_set_property(PROP_INT_CTL_ENABLE, 0x00D1); // Enable CTS, STC and DACQ interrupts
+	si468x_set_property(PROP_INT_CTL_ENABLE, 0x00D1); // Enable CTS, ERR_CMD, STC and DSRV interrupts
 	si468x_set_property(PROP_INT_CTL_REPEAT, 0x0001); // Enable STC interrupt repeat
 	si468x_set_property(PROP_DIGITAL_IO_OUTPUT_SELECT, 0x8000); // I2S set master
 	si468x_set_property(PROP_DIGITAL_IO_OUTPUT_SAMPLE_RATE, 0xAC44); // I2S set sample rate 44.1kHz
@@ -90,26 +89,6 @@ void si468x_init(enum Si468x_MODE mode)
 
 	if (mode == Si468x_MODE_DAB)
 		si468x_DAB_set_freq_list();
-}
-
-void si468x_start_digital_service(uint32_t service_id, uint32_t component_id, enum Digital_Service_Type service_type)
-{
-	uint8_t args[] = {
-			service_type,
-			0x00,
-			0x00,
-			service_id & 0xFF,
-			(service_id >> 8) & 0xFF,
-			(service_id >> 16) & 0xFF,
-			service_id >> 24,
-			component_id & 0xFF,
-			(component_id >> 8) & 0xFF,
-			(component_id >> 16) & 0xFF,
-			component_id >> 24
-	};
-	Si468x_Command *command = si468x_build_command(START_DIGITAL_SERVICE, args, 11);
-	si468x_execute(command);
-	si468x_free_command(command);
 }
 
 void si468x_power_up()
