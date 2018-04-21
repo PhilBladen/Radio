@@ -257,7 +257,7 @@ void si468x_DAB_start_digital_service(uint32_t service_id, uint32_t component_id
 
 void si468x_DAB_get_digital_service_data(uint8_t *buffer, uint16_t *size, uint8_t only_status)
 {
-	uint8_t args[] = {0x0001 | (only_status ? 0x100 : 0x000)};
+	uint8_t args[] = {0x01 | (only_status ? 0x10 : 0x00)};
 	Si468x_Command *command = si468x_build_command(GET_DIGITAL_SERVICE_DATA, args, 1);
 	si468x_execute(command);
 	si468x_free_command(command);
