@@ -306,7 +306,7 @@ DAB_Service_List *si468x_DAB_decode_digital_service_list(uint8_t *service_list_d
 	service_list->services = (DAB_Service**) malloc(service_list->size * sizeof(DAB_Service*));
 
 	// Start reading service 1
-	for (int i = service_list->size - number_of_services; i < service_list->size; i++)
+	for (int i = 0; i < service_list->size; i++)
 	{
 		DAB_Service *service = (DAB_Service*) malloc(sizeof(DAB_Service));
 		service_list->services[i] = service;
